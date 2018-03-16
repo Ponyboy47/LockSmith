@@ -2,6 +2,8 @@
 /.build
 /Packages
 /*.xcodeproj
+/Package.pins
+/Package.resolved
 
 # Vim
 .*.sw[po]
