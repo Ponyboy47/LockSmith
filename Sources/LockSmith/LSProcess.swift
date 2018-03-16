@@ -13,12 +13,6 @@ public final class LSProcess: Hashable {
     public internal(set) var arguments: [String]?
     public internal(set) var name: String
 
-    // These have not been implemented on Linux yet
-    #if !os(Linux)
-    public internal(set) var username: String
-    public internal(set) var fullUserName: String?
-    #endif
-
     public var hashValue: Int {
         return pid.hashValue
     }
@@ -34,21 +28,11 @@ public final class LSProcess: Hashable {
     public var isRunning: Bool { return LSProcess.isRunning(pid) }
 
     static var argSeparator: String = "', '"
-    #if !os(Linux)
-    internal enum Keys: String {
-        case pid
-        case arguments
-        case name
-        case username
-        case fullUserName
-    }
-    #else
     internal enum Keys: String {
         case pid
         case arguments
         case name
     }
-    #endif
 
     public static func isRunning(_ pid: PID) -> Bool {
         guard kill(pid, 0) == 0 else {
@@ -72,12 +56,6 @@ public final class LSProcess: Hashable {
         pid = info.processIdentifier
         arguments = info.arguments
         name = info.processName
-
-        // These are not yet implemented on linux
-        #if !os(Linux)
-        username = info.userName
-        fullUserName = info.fullUserName
-        #endif
     }
 
     internal init(from filepath: FilePath) throws {
@@ -94,9 +72,6 @@ public final class LSProcess: Hashable {
         // Set some defaults to ensure these get set while reading the file
         self.pid = -1
         self.name = ""
-        #if !os(Linux)
-        self.username = ""
-        #endif
 
         let lock = try ReadableFile(open: lockFile)
         for line in lock.lines().filter({ !$0.isEmpty }) {
@@ -113,27 +88,6 @@ public final class LSProcess: Hashable {
                 throw LockSmithError.LockError.corruptFileValue(location: filepath, key: key.rawValue, value: "")
             }
 
-            #if !os(Linux)
-            switch key {
-            case .pid:
-                guard let pid = PID(value) else {
-                    throw LockSmithError.corruptLockFileValue(location: filepath, key: key.rawValue, value: value)
-                }
-                self.pid = pid
-            case .arguments:
-                let args = value.components(separatedBy: Process.argsSeparator)
-                guard !args.isEmpty else {
-                    throw LockSmithError.corruptLockFileValue(location: filepath, key: key.rawValue, value: value)
-                }
-                self.arguments = args
-            case .name:
-                self.name = value
-            case .username:
-                self.username = value
-            case .fullUserName:
-                self.fullUserName = value
-            }
-            #else
             switch key {
             case .pid:
                 guard let pid = PID(value) else {
@@ -149,7 +103,6 @@ public final class LSProcess: Hashable {
             case .name:
                 self.name = value
             }
-            #endif
         }
 
         pidFile = FilePath(filepath.string.replacingOccurrences(of: ".lock", with: ".pid"))
@@ -160,11 +113,6 @@ public final class LSProcess: Hashable {
         guard !self.name.isEmpty else {
             throw LockSmithError.LockError.corruptFileValue(location: filepath, key: Keys.name.rawValue, value: "nil")
         }
-        #if !os(Linux)
-        guard !self.username.isEmpty else {
-            throw LockSmithError.LockError.corruptFileValue(location: filepath, key: Keys.username.rawValue, value: "nil")
-        }
-        #endif
     }
 
     internal func lock() -> Bool {
@@ -201,11 +149,6 @@ public final class LSProcess: Hashable {
         if !(arguments?.isEmpty ?? true) {
             lockFileContents += "\(Keys.arguments.rawValue) => \(arguments!.joined(separator: LSProcess.argSeparator))\n"
         }
-
-        #if !os(Linux)
-        lockFileContents += "\(Keys.username.rawValue) => \(username!)\n"
-        lockFileContents += "\(Keys.fullUserName.rawValue) => \(fullUserName!)\n"
-        #endif
 
         // Should only throw here if we lost a race-condition
         guard let writableLockFile = try? lockFile.create(ifExists: .throwError) else { return false }
