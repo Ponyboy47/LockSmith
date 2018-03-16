@@ -1,5 +1,5 @@
 import Foundation
-import FileSmith
+import PathKit
 import ErrNo
 
 #if os(Linux)
@@ -17,14 +17,14 @@ public final class LSProcess: Hashable {
         return pid.hashValue
     }
 
-    internal var pidFile: FilePath
-    internal var lockFile: FilePath
+    internal var pidFile: Path
+    internal var lockFile: Path
 
     internal lazy var processLock: LSProcessLock = {
         LSProcessLock(self)
     }()
 
-    public var locked: Bool { return lockFile.exists() && isRunning }
+    public var locked: Bool { return lockFile.exists && isRunning }
     public var isRunning: Bool { return LSProcess.isRunning(pid) }
 
     static var argSeparator: String = "', '"
@@ -47,25 +47,21 @@ public final class LSProcess: Hashable {
         return true
     }
 
-    internal init(_ runDirectory: String) {
+    internal init(_ runDirectory: Path) {
         let info = ProcessInfo.processInfo
 
-        lockFile = DirectoryPath(runDirectory) + FilePath("\(info.processName).lock")
-        pidFile = DirectoryPath(runDirectory) + FilePath("\(info.processName).pid")
+        lockFile = runDirectory + "\(info.processName).lock"
+        pidFile = runDirectory + "\(info.processName).pid"
 
         pid = info.processIdentifier
         arguments = info.arguments
         name = info.processName
     }
 
-    internal init(from filepath: FilePath) throws {
-        guard filepath.exists() else {
+    internal init(from filepath: Path) throws {
+        guard filepath.exists else {
             throw LockSmithError.LockError.doesNotExist(type: "process")
         }
-
-        let current = Directory.current
-        Directory.current = try filepath.parent().open()
-        defer { Directory.current = current }
 
         lockFile = filepath
 
@@ -73,8 +69,7 @@ public final class LSProcess: Hashable {
         self.pid = -1
         self.name = ""
 
-        let lock = try ReadableFile(open: lockFile)
-        for line in lock.lines().filter({ !$0.isEmpty }) {
+        for line in try lockFile.read().components(separatedBy: "\n").filter({ !$0.isEmpty }) {
             var comps = line.components(separatedBy: " => ")
             guard comps.count >= 2 else {
                 throw LockSmithError.LockError.corruptFile(location: filepath)
@@ -105,7 +100,7 @@ public final class LSProcess: Hashable {
             }
         }
 
-        pidFile = FilePath(filepath.string.replacingOccurrences(of: ".lock", with: ".pid"))
+        pidFile = Path(filepath.string.replacingOccurrences(of: ".lock", with: ".pid"))
 
         guard self.pid > 0 else {
             throw LockSmithError.LockError.corruptFileValue(location: filepath, key: Keys.pid.rawValue, value: "nil")
@@ -116,17 +111,11 @@ public final class LSProcess: Hashable {
     }
 
     internal func lock() -> Bool {
-        let current = Directory.current
-        guard let new = try? pidFile.parent().open() else { return false }
-        Directory.current = new
-        defer { Directory.current = current }
-
-        let processFiles = Directory.current.files("\(name).{pid,lock}")
+        let processFiles = pidFile.glob("\(name).{pid,lock}")
         for file in processFiles {
             if file.string.hasSuffix(".pid") {
-                guard let pidFile = try? file.open() else { return false }
-
-                guard let pid = PID(pidFile.read()) else { return false }
+                guard let pidContents: String = try? file.read() else { return false }
+                guard let pid = PID(pidContents) else { return false }
 
                 guard !LSProcess.isRunning(pid) else { return false }
             } else {
@@ -135,14 +124,8 @@ public final class LSProcess: Hashable {
                 guard !existingProcess.isRunning else { return false }
             }
 
-            do { try file.edit().delete() } catch { return false }
+            do { try file.delete() } catch { return false }
         }
-
-        // Should only throw here if we lost a race-condition
-        guard let openPIDFile = try? pidFile.create(ifExists: .throwError) else { return false }
-        openPIDFile.write(String(pid))
-
-        guard self.validate(pidFile, contents: pid) else { return false }
 
         var lockFileContents = "\(Keys.pid.rawValue) => \(pid)\n"
         lockFileContents += "\(Keys.name.rawValue) => \(name)\n"
@@ -151,27 +134,31 @@ public final class LSProcess: Hashable {
         }
 
         // Should only throw here if we lost a race-condition
-        guard let writableLockFile = try? lockFile.create(ifExists: .throwError) else { return false }
-        writableLockFile.write(lockFileContents)
+        guard !pidFile.isFile else { return false }
+        guard !lockFile.exists else { return false }
+
+        do {
+            try pidFile.write(String(pid))
+            try lockFile.write(lockFileContents)
+         } catch { return false }
+
+        guard validate(pidFile, contents: pid) else { return false }
         guard validate(lockFile, contents: lockFileContents) else { return false }
 
         return true
     }
 
     internal func unlock() -> Bool {
-        let current = Directory.current
-        guard let new = try? pidFile.parent().open() else { return false }
-        Directory.current = new
-        defer { Directory.current = current }
-
-        do { try pidFile.create(ifExists: .open).delete() } catch { return false }
-        do { try lockFile.create(ifExists: .open).delete() } catch { return false }
+        do {
+            try pidFile.delete()
+            try lockFile.delete()
+        } catch { return false }
 
         return true
     }
 
-    private func validate<C: Validatable>(_ filepath: FilePath, contents: C) -> Bool {
-        guard let strValue = try? filepath.open().read() else { return false }
+    private func validate<C: Validatable>(_ filepath: Path, contents: C) -> Bool {
+        guard let strValue: String = try? filepath.read() else { return false }
         guard let value = C(strValue) else { return false }
         return value == contents
     }

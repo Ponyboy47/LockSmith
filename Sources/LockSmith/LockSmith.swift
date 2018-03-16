@@ -1,3 +1,5 @@
+import PathKit
+
 #if os(Linux)
 import Glibc
 #else
@@ -47,7 +49,7 @@ public final class LockSmith {
 
                         NOTE: macOS still uses /var/run by default, most linux distros just use /run now, but they symlink /var/run to /run, so /var/run should be cross-system compatible
     */
-    public init?(_ runDirectory: String = "/var/run") {
+    public init?(_ runDirectory: Path = "/var/run") {
         process = LSProcess(runDirectory)
         guard lock(process.processLock) else { return nil }
     }

@@ -1,7 +1,7 @@
-import FileSmith
+import PathKit
 
 public enum LSLockInfo: Hashable {
-    case file(FilePath)
+    case file(Path)
     case thread(ThreadID)
     case process(LSProcess)
     case none
@@ -27,9 +27,9 @@ public enum LSLockInfo: Hashable {
     }
 }
 
-open class LSLock: Hashable {
+public class LSLock: Hashable {
     private let info: LSLockInfo
-    internal var file: FilePath?
+    internal var file: Path?
     internal var thread: ThreadID?
     internal var process: LSProcess?
 

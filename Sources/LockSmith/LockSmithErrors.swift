@@ -1,15 +1,15 @@
-import FileSmith
+import PathKit
 
 public enum LockSmithError: Error {
     enum LockError: Error {
         case doesNotExist(type: String)
-        case corruptFile(location: FilePath)
-        case corruptFileKey(location: FilePath)
-        case corruptFileValue(location: FilePath, key: String, value: String)
+        case corruptFile(location: Path)
+        case corruptFileKey(location: Path)
+        case corruptFileValue(location: Path, key: String, value: String)
     }
 
     enum PIDFileError: Error {
-        case corruptFile(FilePath)
+        case corruptFile(Path)
     }
 
     case deadProcess(forPID: PID)

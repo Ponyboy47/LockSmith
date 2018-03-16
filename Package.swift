@@ -12,7 +12,7 @@ let package = Package(
             targets: ["LockSmith"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/kareman/FileSmith.git", from: "0.1.0"),
+        .package(url: "https://github.com/Ponyboy47/PathKit.git", from: "0.9.0"),
         .package(url: "https://github.com/Ponyboy47/ErrNo.git", .upToNextMinor(from: "0.3.0")),
     ],
     targets: [
@@ -20,7 +20,7 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages which this package depends on.
         .target(
             name: "LockSmith",
-            dependencies: ["FileSmith", "ErrNo"]),
+            dependencies: ["PathKit", "ErrNo"]),
         .testTarget(
             name: "LockSmithTests",
             dependencies: ["LockSmith"]),
