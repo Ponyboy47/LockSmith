@@ -4,7 +4,6 @@ public enum LSLockInfo: Hashable {
     case file(Path)
     case thread(ThreadID)
     case process(LSProcess)
-    case none
 
 	public var hashValue: Int {
 		switch self {
@@ -23,11 +22,11 @@ public enum LSLockInfo: Hashable {
         } else if case let .process(lprocess) = lhs, case let .process(rprocess) = rhs {
             return lprocess == rprocess
         }
-        return lhs == .none && rhs == .none
+        return false
     }
 }
 
-public class LSLock: Hashable {
+open class LSLock: Hashable {
     private let info: LSLockInfo
     internal var file: Path?
     internal var thread: ThreadID?
@@ -35,6 +34,10 @@ public class LSLock: Hashable {
 
     public var hashValue: Int {
         return info.hashValue
+    }
+
+    public var isLocked: Bool {
+        fatalError("isLocked must be implemented in its subclasses")
     }
 
     public init(_ info: LSLockInfo) {
@@ -48,15 +51,19 @@ public class LSLock: Hashable {
     }
 
     @discardableResult func lock() -> Bool {
-        fatalError("lock() must be implemented in its subclass")
+        fatalError("lock() must be implemented in its subclasses")
     }
 
     @discardableResult func unlock() -> Bool {
-        fatalError("unlock() must be implemented in its subclass")
+        fatalError("unlock() must be implemented in its subclasses")
     }
 
     public static func == (lhs: LSLock, rhs: LSLock) -> Bool {
         return lhs.info == rhs.info
+    }
+
+    public static func check(_ lockInfo: LSLockInfo) -> Bool {
+        return LSLock(lockInfo).isLocked
     }
 
     deinit {

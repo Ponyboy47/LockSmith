@@ -1,4 +1,6 @@
 internal final class LSProcessLock: LSLock {
+    override public var isLocked: Bool { return process?.isLocked ?? false }
+
     convenience init(_ process: LSProcess) {
         self.init(.process(process))
     }
