@@ -9,32 +9,32 @@ import Darwin
 #endif
 
 public final class LSProcess: Hashable {
-    public internal(set) var pid: PID
-    public internal(set) var arguments: [String]?
-    public internal(set) var name: String
+    var pid: PID
+    var arguments: [String]?
+    var name: String
 
     public var hashValue: Int {
         return pid.hashValue
     }
 
-    internal var pidFile: Path
-    internal var lockFile: Path
+    var pidFile: Path
+    var lockFile: Path
 
-    internal lazy var processLock: LSProcessLock = {
+    lazy var processLock: LSProcessLock = {
         LSProcessLock(self)
     }()
 
-    public var locked: Bool { return lockFile.exists && isRunning }
-    public var isRunning: Bool { return LSProcess.isRunning(pid) }
+    var isLocked: Bool { return lockFile.exists && isRunning }
+    var isRunning: Bool { return LSProcess.isRunning(pid) }
 
-    static var argSeparator: String = "', '"
-    internal enum Keys: String {
+    private static var argSeparator: String = "', '"
+    enum Keys: String {
         case pid
         case arguments
         case name
     }
 
-    public static func isRunning(_ pid: PID) -> Bool {
+    static func isRunning(_ pid: PID) -> Bool {
         guard kill(pid, 0) == 0 else {
             if let perror = lastError() {
                 switch perror {
@@ -47,7 +47,7 @@ public final class LSProcess: Hashable {
         return true
     }
 
-    internal init(_ runDirectory: Path) {
+    init(_ runDirectory: Path) {
         let info = ProcessInfo.processInfo
 
         lockFile = runDirectory + "\(info.processName).lock"
@@ -58,7 +58,7 @@ public final class LSProcess: Hashable {
         name = info.processName
     }
 
-    internal init(from filepath: Path) throws {
+    init(from filepath: Path) throws {
         guard filepath.exists else {
             throw LockSmithError.LockError.doesNotExist(type: "process")
         }
@@ -110,7 +110,7 @@ public final class LSProcess: Hashable {
         }
     }
 
-    internal func lock() -> Bool {
+    func lock() -> Bool {
         let processFiles = pidFile.glob("\(name).{pid,lock}")
         for file in processFiles {
             if file.string.hasSuffix(".pid") {
@@ -148,7 +148,7 @@ public final class LSProcess: Hashable {
         return true
     }
 
-    internal func unlock() -> Bool {
+    func unlock() -> Bool {
         do {
             try pidFile.delete()
             try lockFile.delete()
