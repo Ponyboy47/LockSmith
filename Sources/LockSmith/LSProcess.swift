@@ -12,6 +12,7 @@ public final class LSProcess: Hashable {
     var pid: PID
     var arguments: [String]?
     var name: String
+    var username: String = ""
 
     public var hashValue: Int {
         return pid.hashValue
@@ -32,6 +33,7 @@ public final class LSProcess: Hashable {
         case pid
         case arguments
         case name
+        case username
     }
 
     static func isRunning(_ pid: PID) -> Bool {
@@ -56,6 +58,11 @@ public final class LSProcess: Hashable {
         pid = info.processIdentifier
         arguments = info.arguments
         name = info.processName
+
+        let pw = getpwuid(geteuid())
+        if let usernameBytes = pw?.pointee.pw_name {
+            username = String(cString: usernameBytes)
+        }
     }
 
     init(from filepath: Path) throws {
@@ -97,6 +104,8 @@ public final class LSProcess: Hashable {
                 self.arguments = args
             case .name:
                 self.name = value
+            case .username:
+                self.username = value
             }
         }
 
@@ -131,6 +140,9 @@ public final class LSProcess: Hashable {
         lockFileContents += "\(Keys.name.rawValue) => \(name)\n"
         if !(arguments?.isEmpty ?? true) {
             lockFileContents += "\(Keys.arguments.rawValue) => \(arguments!.joined(separator: LSProcess.argSeparator))\n"
+        }
+        if !username.isEmpty {
+            lockFileContents += "\(Keys.username.rawValue) => \(username)\n"
         }
 
         // Should only throw here if we lost a race-condition

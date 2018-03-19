@@ -37,6 +37,8 @@ public final class LockSmith {
     public lazy var name: String = { return process.name }()
     /// The arguments of the current swift process
     public lazy var arguments: [String]? = { return process.arguments }()
+    /// The username that ran the current swift process
+    public lazy var username: String = { return process.username }()
 
     /// The current items that are locked. Should always contain at least 1
     /// (since the current swift process is automatically locked during
@@ -53,6 +55,7 @@ public final class LockSmith {
                         NOTE: macOS still uses /var/run by default, most linux distros just use /run now, but they symlink /var/run to /run, so /var/run should be cross-system compatible
     */
     public init?(_ runDirectory: Path = "/var/run") {
+        if runDirectory == "/var/run" && geteuid() != 0 { return nil }
         process = LSProcess(runDirectory)
         guard lock(process.processLock) else { return nil }
     }
