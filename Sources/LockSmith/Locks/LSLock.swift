@@ -1,75 +1,39 @@
-import PathKit
-
-public enum LSLockInfo: Hashable {
-    case file(Path)
-    case thread(ThreadID)
-    case process(LSProcess)
-
-	public var hashValue: Int {
-		switch self {
-        case .file(let path): return path.hashValue
-        case .thread(let id): return id.hashValue
-        case .process(let process): return process.hashValue
-        default: return 0
-		}
-    }
-
-    public static func == (lhs: LSLockInfo, rhs: LSLockInfo) -> Bool {
-        if case let .file(lpath) = lhs, case let .file(rpath) = rhs {
-            return lpath == rpath
-        } else if case let .thread(lid) = lhs, case let .thread(rid) = rhs {
-            return lid == rid
-        } else if case let .process(lprocess) = lhs, case let .process(rprocess) = rhs {
-            return lprocess == rprocess
-        }
-        return false
-    }
+public protocol Lockable: CustomStringConvertible {
+    var isLocked: Bool { get }
+    func lock() -> Bool
+    func unlock() -> Bool
 }
 
-open class LSLock: Hashable {
-    private let info: LSLockInfo
-    internal var file: Path?
-    internal var thread: ThreadID?
-    internal var process: LSProcess?
+open class LSLock<LockType: Lockable>: Lockable {
+    private let toLock: LockType
 
-    public var hashValue: Int {
-        return info.hashValue
+    public var isLocked: Bool { return toLock.isLocked }
+
+    public var description: String {
+        return "\(type(of: self))(\(toLock.description))"
     }
 
-    public var isLocked: Bool {
-        fatalError("isLocked must be implemented in its subclasses")
-    }
-
-    public init(_ info: LSLockInfo) {
-        self.info = info
-        switch info {
-        case .file(let filepath): self.file = filepath
-        case .thread(let thread): self.thread = thread
-        case .process(let process): self.process = process
-        default: return
-        }
-    }
-
-    @discardableResult func lock() -> Bool {
-        fatalError("lock() must be implemented in its subclasses")
-    }
-
-    @discardableResult func unlock() -> Bool {
-        fatalError("unlock() must be implemented in its subclasses")
-    }
-
-    public static func == (lhs: LSLock, rhs: LSLock) -> Bool {
-        return lhs.info == rhs.info
-    }
-
-    public static func check(_ lockInfo: LSLockInfo) -> Bool {
-        return LSLock(lockInfo).isLocked
+    public init(_ toLock: LockType) {
+        self.toLock = toLock
     }
 
     deinit {
-        guard unlock() else {
-            print("Could not unlock \(self)")
-            return
+        if !unlock() {
+            print("Failed to unlock \(self)")
         }
     }
+
+    @discardableResult public func lock() -> Bool { return toLock.lock() }
+
+    @discardableResult public func unlock() -> Bool { return toLock.unlock() }
+}
+
+extension LSLock: Equatable where LockType: Equatable {
+    public static func == (lhs: LSLock, rhs: LSLock) -> Bool {
+        return lhs.toLock == rhs.toLock
+    }
+}
+
+extension LSLock: Hashable where LockType: Hashable {
+    public var hashValue: Int { return toLock.hashValue }
 }

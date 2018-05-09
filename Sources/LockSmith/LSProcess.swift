@@ -8,11 +8,15 @@ import Glibc
 import Darwin
 #endif
 
-public final class LSProcess: Hashable {
+public final class LSProcess: Lockable {
     var pid: PID
     var arguments: [String]?
     var name: String
     var username: String = ""
+
+    public var description: String {
+        return "\(type(of: self))(pid: \(pid), name: \(name), username: \(username))"
+    }
 
     public var hashValue: Int {
         return pid.hashValue
@@ -25,7 +29,7 @@ public final class LSProcess: Hashable {
         LSProcessLock(self)
     }()
 
-    var isLocked: Bool { return lockFile.exists && isRunning }
+    public var isLocked: Bool { return lockFile.exists && isRunning }
     var isRunning: Bool { return LSProcess.isRunning(pid) }
 
     private static var argSeparator: String = "', '"
@@ -38,13 +42,10 @@ public final class LSProcess: Hashable {
 
     static func isRunning(_ pid: PID) -> Bool {
         guard kill(pid, 0) == 0 else {
-            if let perror = lastError() {
-                switch perror {
-                case ESRCH: return false
-                default: return true
-                }
+            switch ErrNo.lastError {
+            case ESRCH: return false
+            default: return true
             }
-            return false
         }
         return true
     }
@@ -119,8 +120,8 @@ public final class LSProcess: Hashable {
         }
     }
 
-    func lock() -> Bool {
-        let processFiles = pidFile.glob("\(name).{pid,lock}")
+    public func lock() -> Bool {
+        let processFiles = pidFile.parent.absolute.glob("\(name).{pid,lock}")
         for file in processFiles {
             if file.string.hasSuffix(".pid") {
                 guard let pidContents: String = try? file.read() else { return false }
@@ -160,7 +161,7 @@ public final class LSProcess: Hashable {
         return true
     }
 
-    func unlock() -> Bool {
+    public func unlock() -> Bool {
         do {
             try pidFile.delete()
             try lockFile.delete()

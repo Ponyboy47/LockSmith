@@ -1,67 +1,36 @@
 import Foundation
 import PathKit
 
-final class LSFileLock: LSLock {
-    private var lockFile: Path { return file! + ".lock" }
+public typealias LSFileLock = LSLock<Path>
+
+extension Path: Lockable {
     private static var lockContents: String = {
         "\(ProcessInfo.processInfo.processIdentifier) \(ProcessInfo.processInfo.processName)"
     }()
 
-    override public var isLocked: Bool { return file != nil && lockFile.isFile }
+    var lockFile: Path { return Path(self.string + ".lock") }
+    public var isLocked: Bool { return isFile && lockExists }
+    private var lockExists: Bool { return lockFile.exists }
 
-    convenience init(_ file: Path) {
-        self.init(.file(file))
+    @discardableResult public func lock() -> Bool {
+        guard !isLocked else { return checkLockOwner() }
+
+        guard (try? lockFile.write(Path.lockContents)) != nil else { return false }
+
+        return isLocked && checkLockOwner()
     }
 
-    @discardableResult override func lock() -> Bool {
-        guard file != nil else { return false }
-        guard !lockFile.isFile else { return validateLock() }
+    /// Returns whether the lock is owned by the current process
+    private func checkLockOwner() -> Bool {
+        guard let contents: String = try? lockFile.read() else { return false }
 
-        do {
-            try lockFile.write(LSFileLock.lockContents)
-        } catch { return false }
-
-        return validateLock()
+        return contents == Path.lockContents
     }
 
-    private func validateLock() -> Bool {
-        guard file != nil else { return false }
-        guard lockFile.isFile else { return false }
+    @discardableResult public func unlock() -> Bool {
+        guard isLocked else { return true }
+        guard checkLockOwner() else { return false }
 
-        do {
-            return try lockFile.read() == LSFileLock.lockContents
-        } catch { return false }
-    }
-
-    @discardableResult override func unlock() -> Bool {
-        guard validateLock() else { return false }
-
-        do {
-            try lockFile.delete()
-        } catch { return false }
-
-        return true
-    }
-
-    public static func check(_ filepath: Path) -> Bool {
-        return LSFileLock(filepath).isLocked
-    }
-}
-
-extension LockSmith {
-    @discardableResult public func lock(paths filepaths: [Path]) -> Bool {
-        return lock(filepaths.map { .file($0) })
-    }
-
-    @discardableResult public func lock(_ filepaths: Path...) -> Bool {
-        return lock(paths: filepaths)
-    }
-
-    @discardableResult public func unlock(paths filepaths: [Path]) -> Bool {
-        return unlock(filepaths.map { .file($0) })
-    }
-
-    @discardableResult public func unlock(_ filepaths: Path...) -> Bool {
-        return unlock(paths: filepaths)
+        return (try? lockFile.delete()) != nil
     }
 }

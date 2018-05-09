@@ -40,13 +40,8 @@ public final class LockSmith {
     /// The username that ran the current swift process
     public lazy var username: String = { return process.username }()
 
-    /// The current items that are locked. Should always contain at least 1
-    /// (since the current swift process is automatically locked during
-    /// initialization)
-    private var locks: Set<LSLock> = Set([])
-
     /**
-    Initializes the LockSmit
+    Initializes the LockSmith
 
     - Parameters:
         - runDirectory: The directory where you wish to store and check for process .pid and .lock files
@@ -57,55 +52,45 @@ public final class LockSmith {
     public init?(_ runDirectory: Path = "/var/run") {
         if runDirectory == "/var/run" && geteuid() != 0 { return nil }
         process = LSProcess(runDirectory)
-        guard lock(process.processLock) else { return nil }
+        guard process.processLock.lock() else { return nil }
     }
 
     /**
     Lock the provided LSLocks
 
     - Parameter locks: An Array of LSLocks that should be locked
+    - Returns: The locks that were not locked
+    */
+    @discardableResult public func lock<L>(_ locks: [LSLock<L>]) -> [LSLock<L>] {
+        return LockSmith.lock(locks)
+    }
+    /**
+    Lock the provided LSLocks
+
+    - Parameter locks: An Array of LSLocks that should be locked
     - Returns: Whether or not all of the locks were successfully locked
     */
-    @discardableResult public func lock(_ locks: [LSLock]) -> Bool {
-        for lock in locks {
-            // Already locked
-            guard !self.locks.contains(lock) else { continue }
-            guard lock.lock() else { return false }
-
-            self.locks.insert(lock)
-        }
-
-        return true
+    @discardableResult public static func lock<L>(_ locks: [LSLock<L>]) -> [LSLock<L>] {
+        return locks.filter() { !$0.lock() }
     }
 
     /**
-    Lock the provided LSLock
+    Lock the provided Lockables
 
-    - Parameter lock: An LSLock that should be locked
-    - Returns: Whether or not the lock was successfully locked
-    */
-    @discardableResult public func lock(_ lock: LSLock) -> Bool {
-        return self.lock([lock])
-    }
-
-    /**
-    Creates locks for each of the LSLockInfo objects and then locks them
-
-    - Parameter locks: An Array of LSLockInfo objects that should be locked
+    - Parameter locks: An Array of Lockable objects that should be locked
     - Returns: Whether or not all of the locks were successfully locked
     */
-    @discardableResult public func lock(_ lockInfos: [LSLockInfo]) -> Bool {
-        return lock(lockInfos.map { LSLock($0) })
+    @discardableResult public func lock<L: Lockable>(_ items: [L]) -> [L] {
+        return LockSmith.lock(items)
     }
-
     /**
-    Creates a lock for the LSLockInfo object and then locks it
+    Lock the provided Lockables
 
-    - Parameter lock: An LSLockInfo object that should be locked
+    - Parameter locks: An Array of Lockable objects that should be locked
     - Returns: Whether or not all of the locks were successfully locked
     */
-    @discardableResult public func lock(_ lockInfo: LSLockInfo) -> Bool {
-        return lock([lockInfo])
+    @discardableResult public static func lock<L: Lockable>(_ items: [L]) -> [L] {
+        return items.filter() { !$0.lock() }
     }
 
     /**
@@ -114,54 +99,35 @@ public final class LockSmith {
     - Parameter locks: An Array of LSLocks that should be unlocked
     - Returns: Whether or not all of the locks were successfully unlocked
     */
-    @discardableResult public func unlock(_ locks: [LSLock]) -> Bool {
-        for lock in locks {
-            // Already unlocked
-            guard !locks.contains(lock) else { continue }
-            guard lock.unlock() else { return false }
-
-            self.locks.remove(lock)
-        }
-
-        return true
+    @discardableResult public func unlock<L>(_ locks: [LSLock<L>]) -> [LSLock<L>] {
+        return LockSmith.unlock(locks)
     }
-
     /**
-    Unlock the provided LSLock
+    Unlock the provided LSLocks
 
-    - Parameter lock: An LSLock that should be unlocked
-    - Returns: Whether or not the lock was successfully unlocked
-    */
-    @discardableResult public func unlock(_ lock: LSLock) -> Bool {
-        return unlock([lock])
-    }
-
-    /**
-    Creates locks for each of the LSLockInfo objects and then unlocks them
-
-    - Parameter locks: An Array of LSLockInfo objects that should be unlocked
+    - Parameter locks: An Array of LSLocks that should be unlocked
     - Returns: Whether or not all of the locks were successfully unlocked
     */
-    @discardableResult public func unlock(_ lockInfos: [LSLockInfo]) -> Bool {
-        return unlock(lockInfos.map { LSLock($0) })
+    @discardableResult public static func unlock<L>(_ locks: [LSLock<L>]) -> [LSLock<L>] {
+        return locks.filter() { !$0.unlock() }
     }
 
     /**
-    Creates a lock for the LSLockInfo object and then unlocks it
+    Unlock the provided Lockables
 
-    - Parameter lock: An LSLockInfo object that should be unlocked
-    - Returns: Whether or not the lock was successfully unlocked
+    - Parameter locks: An Array of Lockable objects that should be unlocked
+    - Returns: Whether or not all of the locks were successfully unlocked
     */
-    @discardableResult public func unlock(_ lockInfo: LSLockInfo) -> Bool {
-        return unlock([lockInfo])
+    @discardableResult public func unlock<L: Lockable>(_ items: [L]) -> [L] {
+        return LockSmith.unlock(items)
     }
+    /**
+    Unlock the provided Lockables
 
-    deinit {
-        for lock in locks {
-            guard lock.unlock() else {
-                print("Failed to unlock \(lock)")
-                continue
-            }
-        }
+    - Parameter locks: An Array of Lockable objects that should be unlocked
+    - Returns: Whether or not all of the locks were successfully unlocked
+    */
+    @discardableResult public static func unlock<L: Lockable>(_ items: [L]) -> [L] {
+        return items.filter() { !$0.unlock() }
     }
 }

@@ -12,8 +12,8 @@ let package = Package(
             targets: ["LockSmith"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Ponyboy47/PathKit.git", from: "0.9.0"),
-        .package(url: "https://github.com/Ponyboy47/ErrNo.git", .upToNextMinor(from: "0.3.0")),
+        .package(url: "https://github.com/Ponyboy47/PathKit.git", from: "0.10.0"),
+        .package(url: "https://github.com/Ponyboy47/ErrNo.git", .upToNextMinor(from: "0.4.1")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -23,6 +23,6 @@ let package = Package(
             dependencies: ["PathKit", "ErrNo"]),
         .testTarget(
             name: "LockSmithTests",
-            dependencies: ["LockSmith"]),
+            dependencies: ["LockSmith", "PathKit"]),
     ]
 )
