@@ -1,37 +1,32 @@
 import XCTest
-import PathKit
+import TrailBlazer
 @testable import LockSmith
 
 class LSFileLockTests: XCTestCase {
-    lazy var runDir: Path = {
-        return Path("/tmp/\(self.name)")
+    lazy var runDir: DirectoryPath = {
+        return DirectoryPath("/tmp/\(self.name)")!
     }()
 
     func lockAndUnlockOneTest() {
-        XCTAssertNoThrow(try runDir.mkpath())
+        XCTAssertNoThrow(try runDir.create(options: .createIntermediates))
+ 
+        var testFile = runDir + FilePath("testFile.txt")!
+        XCTAssertNoThrow(try testFile.create())
 
-        var singleton = LockSmith(runDir)
-
-        let testFile = runDir + "testFile.txt"
-        XCTAssertNoThrow(try testFile.write(""))
-
-        XCTAssertNotNil(singleton)
-
-        XCTAssertTrue(testFile.lock())
+        XCTAssertNoThrow(try testFile.lock())
         XCTAssertTrue(testFile.isLocked)
-        XCTAssertTrue(testFile.unlock())
+        XCTAssertNoThrow(try testFile.unlock())
         XCTAssertFalse(testFile.isLocked)
 
-        singleton = nil
-        try? runDir.delete()
+        try? runDir.recursiveDelete()
     }
 
     func lockAndUnlockManyTest() {
-        XCTAssertNoThrow(try runDir.mkpath())
+        XCTAssertNoThrow(try runDir.create(options: .createIntermediates))
 
-        let file1 = runDir + "testFile1.txt"
-        let file2 = runDir + "testFile2.txt"
-        let file3 = runDir + "testFile3.txt"
+        let file1 = runDir + FilePath("testFile1.txt")!
+        let file2 = runDir + FilePath("testFile2.txt")!
+        let file3 = runDir + FilePath("testFile3.txt")!
 
         let toLock = [file1, file2, file3]
 
@@ -40,7 +35,7 @@ class LSFileLockTests: XCTestCase {
         XCTAssertTrue(LockSmith.lock(toLock).isEmpty)
         XCTAssertFalse(toLock.reduce(false, { guard !$0 else { return $0 }; return $1.isLocked }))
 
-        try? runDir.delete()
+        try? runDir.recursiveDelete()
     }
 
     static var allTests = [

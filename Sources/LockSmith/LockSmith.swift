@@ -1,9 +1,13 @@
-import PathKit
+import struct TrailBlazer.DirectoryPath
 
 #if os(Linux)
-import Glibc
+import struct Glibc.pid_t
+import func Glibc.geteuid
+public let systemRunDirectory = DirectoryPath("/run")!
 #else
-import Darwin
+import struct Darwin.pid_t
+import func Darwin.geteuid
+public let systemRunDirectory = DirectoryPath("/var/run")!
 #endif
 
 /// The type for a process's identifier (Should just be Int32)
@@ -23,9 +27,9 @@ public final class LockSmith {
     project by using singleton. No worrying about passing it around or making
     a global varialble
     */
-    public static var singleton: LockSmith? {
-        return LockSmith()
-    }
+    public static let singleton: LockSmith? = {
+        return try? LockSmith()
+    }()
 
     /// Contains information about the current swift process (a wrapper around
     /// ProcessInfo, formerly NSProcessInfo)
@@ -45,14 +49,15 @@ public final class LockSmith {
 
     - Parameters:
         - runDirectory: The directory where you wish to store and check for process .pid and .lock files
-                        default: /var/run
-
-                        NOTE: macOS still uses /var/run by default, most linux distros just use /run now, but they symlink /var/run to /run, so /var/run should be cross-system compatible
+                        default: /var/run on macOS or /run on Linux
     */
-    public init?(_ runDirectory: Path = "/var/run") {
-        if runDirectory == "/var/run" && geteuid() != 0 { return nil }
-        process = LSProcess(runDirectory)
-        guard process.processLock.lock() else { return nil }
+    public init(_ runDirectory: DirectoryPath? = nil) throws {
+        if let runDir = runDirectory {
+            process = LSProcess(runDir)
+        } else if geteuid() == 0 {
+            process = LSProcess(systemRunDirectory)
+        } else { throw LockSmithError.unknownRunDirectory }
+        try process.processLock.lock()
     }
 
     /**
@@ -71,7 +76,7 @@ public final class LockSmith {
     - Returns: Whether or not all of the locks were successfully locked
     */
     @discardableResult public static func lock<L>(_ locks: [LSLock<L>]) -> [LSLock<L>] {
-        return locks.filter() { !$0.lock() }
+        return locks.filter() { (try? $0.lock()) == nil }
     }
 
     /**
@@ -90,7 +95,7 @@ public final class LockSmith {
     - Returns: Whether or not all of the locks were successfully locked
     */
     @discardableResult public static func lock<L: Lockable>(_ items: [L]) -> [L] {
-        return items.filter() { !$0.lock() }
+        return items.filter() { (try? $0.lock()) == nil }
     }
 
     /**
@@ -109,7 +114,7 @@ public final class LockSmith {
     - Returns: Whether or not all of the locks were successfully unlocked
     */
     @discardableResult public static func unlock<L>(_ locks: [LSLock<L>]) -> [LSLock<L>] {
-        return locks.filter() { !$0.unlock() }
+        return locks.filter() { (try? $0.unlock()) == nil }
     }
 
     /**
@@ -128,6 +133,6 @@ public final class LockSmith {
     - Returns: Whether or not all of the locks were successfully unlocked
     */
     @discardableResult public static func unlock<L: Lockable>(_ items: [L]) -> [L] {
-        return items.filter() { !$0.unlock() }
+        return items.filter() { (try? $0.unlock()) == nil }
     }
 }

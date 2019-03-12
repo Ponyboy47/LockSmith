@@ -1,47 +1,39 @@
 import XCTest
-import PathKit
+import TrailBlazer
 @testable import LockSmith
 
 class LockSmithTests: XCTestCase {
-    lazy var runDir: Path = {
-        return Path("/tmp/\(self.name)")
+    lazy var runDir: DirectoryPath = {
+        return DirectoryPath("/tmp/\(self.name)")!
     }()
 
     func singletonTest() {
-        XCTAssertNoThrow(try runDir.mkpath())
+        XCTAssertNoThrow(try runDir.create(options: .createIntermediates))
 
-        guard runDir.isDirectory else { return }
+        XCTAssertNoThrow(try LockSmith(runDir))
 
-        var singleton = LockSmith(runDir)
-
-        if singleton == nil {
-            XCTFail("Process is already locked")
-        }
-
-        singleton = nil
-        try? runDir.delete()
+        try? runDir.recursiveDelete()
     }
 
     func manyTest() {
-        let firstRunDir = runDir + "first"
-        let secondRunDir = runDir + "second"
+        var firstRunDir = runDir + DirectoryPath("first")!
+        var secondRunDir = runDir + DirectoryPath("second")!
 
-        XCTAssertNoThrow(try firstRunDir.mkpath())
-        XCTAssertNoThrow(try secondRunDir.mkpath())
+        XCTAssertNoThrow(try firstRunDir.create(options: .createIntermediates))
+        XCTAssertNoThrow(try secondRunDir.create())
 
-        guard firstRunDir.isDirectory, secondRunDir.isDirectory else { return }
-
-        var first = LockSmith(firstRunDir)
-        var second = LockSmith(secondRunDir)
-        let third = LockSmith(secondRunDir)
-
-        XCTAssertNotNil(first)
-        XCTAssertNotNil(second)
-        XCTAssertNil(third)
-
-        first = nil
-        second = nil
-        try? runDir.delete()
+        XCTAssertNoThrow(try LockSmith(firstRunDir))
+        do {
+            let _ = try LockSmith(secondRunDir)
+            do {
+                let _ = try LockSmith(secondRunDir)
+                XCTFail("Should have failed to lock twice in \(secondRunDir)")
+            } catch {}
+        } catch {
+            XCTFail("Failed to lock process in run dir: \(secondRunDir)")
+            return
+        }
+        try? runDir.recursiveDelete()
     }
 
     static var allTests = [

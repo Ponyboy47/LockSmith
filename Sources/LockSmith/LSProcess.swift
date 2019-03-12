@@ -1,11 +1,15 @@
-import Foundation
-import PathKit
+import TrailBlazer
 import ErrNo
+import class Foundation.ProcessInfo
 
 #if os(Linux)
-import Glibc
+import func Glibc.kill
+import func Glibc.geteuid
+import func Glibc.getpwuid
 #else
-import Darwin
+import func Darwin.kill
+import func Darwin.geteuid
+import func Darwin.getpwuid
 #endif
 
 public final class LSProcess: Lockable {
@@ -22,8 +26,8 @@ public final class LSProcess: Lockable {
         return pid.hashValue
     }
 
-    var pidFile: Path
-    var lockFile: Path
+    var pidFile: FilePath
+    var lockFile: FilePath
 
     lazy var processLock: LSProcessLock = {
         LSProcessLock(self)
@@ -43,18 +47,18 @@ public final class LSProcess: Lockable {
     static func isRunning(_ pid: PID) -> Bool {
         guard kill(pid, 0) == 0 else {
             switch ErrNo.lastError {
-            case ESRCH: return false
+            case .ESRCH: return false
             default: return true
             }
         }
         return true
     }
 
-    init(_ runDirectory: Path) {
+    init(_ runDirectory: DirectoryPath) {
         let info = ProcessInfo.processInfo
 
-        lockFile = runDirectory + "\(info.processName).lock"
-        pidFile = runDirectory + "\(info.processName).pid"
+        lockFile = runDirectory + FilePath("\(info.processName).lock")!
+        pidFile = runDirectory + FilePath("\(info.processName).pid")!
 
         pid = info.processIdentifier
         arguments = info.arguments
@@ -66,7 +70,7 @@ public final class LSProcess: Lockable {
         }
     }
 
-    init(from filepath: Path) throws {
+    init(from filepath: FilePath) throws {
         guard filepath.exists else {
             throw LockSmithError.LockError.doesNotExist(type: "process")
         }
@@ -77,7 +81,10 @@ public final class LSProcess: Lockable {
         self.pid = -1
         self.name = ""
 
-        for line in try lockFile.read().components(separatedBy: "\n").filter({ !$0.isEmpty }) {
+        guard let contents: String = try lockFile.read() else {
+            throw LockSmithError.StringError.notConvertible(using: .utf8)
+        }
+        for line in contents.components(separatedBy: "\n").lazy.filter({ !$0.isEmpty }).lazy {
             var comps = line.components(separatedBy: " => ")
             guard comps.count >= 2 else {
                 throw LockSmithError.LockError.corruptFile(location: filepath)
@@ -110,7 +117,7 @@ public final class LSProcess: Lockable {
             }
         }
 
-        pidFile = Path(filepath.string.replacingOccurrences(of: ".lock", with: ".pid"))
+        pidFile = FilePath(filepath.string.replacingOccurrences(of: ".lock", with: ".pid"))!
 
         guard self.pid > 0 else {
             throw LockSmithError.LockError.corruptFileValue(location: filepath, key: Keys.pid.rawValue, value: "nil")
@@ -120,22 +127,25 @@ public final class LSProcess: Lockable {
         }
     }
 
-    public func lock() -> Bool {
-        let processFiles = pidFile.parent.absolute.glob("\(name).{pid,lock}")
-        for file in processFiles {
-            if file.string.hasSuffix(".pid") {
-                guard let pidContents: String = try? file.read() else { return false }
-                guard let pid = PID(pidContents) else { return false }
+    public func lock() throws {
+        do {
+            let globbed = try (pidFile.parent.absolute ?? pidFile.parent).glob(pattern: "\(name).{pid,lock}")
 
-                guard !LSProcess.isRunning(pid) else { return false }
-            } else {
-                guard let existingProcess = try? LSProcess(from: file) else { return false }
+            for var file in globbed.matches.files {
+                if file.string.hasSuffix(".pid") {
+                    let pidContents: String = try file.read() ?! LockSmithError.LockError.failedToLock(reason: "\(file.string) is not a utf-8 encoded file")
+                    guard let pid = PID(pidContents) else { throw LockSmithError.PIDFileError.invalidPID(pidContents) }
 
-                guard !existingProcess.isRunning else { return false }
+                    guard !LSProcess.isRunning(pid) else { throw LockSmithError.existingProcess(withPID: pid) }
+                } else {
+                    let existingProcess = try LSProcess(from: file)
+
+                    guard !existingProcess.isRunning else { throw LockSmithError.existingProcess(withPID: pid) }
+                }
+
+                try file.delete()
             }
-
-            do { try file.delete() } catch { return false }
-        }
+        } catch GlobError.noMatches {}
 
         var lockFileContents = "\(Keys.pid.rawValue) => \(pid)\n"
         lockFileContents += "\(Keys.name.rawValue) => \(name)\n"
@@ -146,45 +156,18 @@ public final class LSProcess: Lockable {
             lockFileContents += "\(Keys.username.rawValue) => \(username)\n"
         }
 
-        // Should only throw here if we lost a race-condition
-        guard !pidFile.isFile else { return false }
-        guard !lockFile.exists else { return false }
-
-        do {
-            try pidFile.write(String(pid))
-            try lockFile.write(lockFileContents)
-         } catch { return false }
-
-        guard validate(pidFile, contents: pid) else { return false }
-        guard validate(lockFile, contents: lockFileContents) else { return false }
-
-        return true
+        try pidFile.create(contents: String(pid))
+        try lockFile.create(contents: lockFileContents)
     }
 
-    public func unlock() -> Bool {
-        do {
-            try pidFile.delete()
-            try lockFile.delete()
-        } catch { return false }
-
-        return true
-    }
-
-    private func validate<C: Validatable>(_ filepath: Path, contents: C) -> Bool {
-        guard let strValue: String = try? filepath.read() else { return false }
-        guard let value = C(strValue) else { return false }
-        return value == contents
+    public func unlock() throws {
+        try pidFile.delete()
+        try lockFile.delete()
     }
 
     public static func == (lhs: LSProcess, rhs: LSProcess) -> Bool {
-        return lhs.pid == rhs.pid
+        return lhs.arguments == rhs.arguments &&
+               lhs.name == rhs.name &&
+               lhs.username == rhs.username
     }
-}
-
-fileprivate protocol Validatable: Equatable, CustomStringConvertible {
-    init?(_ string: String)
-}
-extension PID: Validatable {}
-extension String: Validatable {
-    init?(_ string: String) { self = string }
 }

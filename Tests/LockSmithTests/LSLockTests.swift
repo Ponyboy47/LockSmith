@@ -1,10 +1,10 @@
 import XCTest
-import PathKit
+import TrailBlazer
 @testable import LockSmith
 
 class LSLockTests: XCTestCase {
-    lazy var runDir: Path = {
-        return Path("/tmp/\(self.name)")
+    lazy var runDir: DirectoryPath = {
+        return DirectoryPath("/tmp/\(self.name)")!
     }()
 
     func create() {

@@ -1,7 +1,7 @@
 public protocol Lockable: CustomStringConvertible {
     var isLocked: Bool { get }
-    func lock() -> Bool
-    func unlock() -> Bool
+    func lock() throws
+    func unlock() throws
 }
 
 open class LSLock<LockType: Lockable>: Lockable {
@@ -17,15 +17,11 @@ open class LSLock<LockType: Lockable>: Lockable {
         self.toLock = toLock
     }
 
-    deinit {
-        if !unlock() {
-            print("Failed to unlock \(self)")
-        }
-    }
+    deinit { try? unlock() }
 
-    @discardableResult public func lock() -> Bool { return toLock.lock() }
+    public func lock() throws { try toLock.lock() }
 
-    @discardableResult public func unlock() -> Bool { return toLock.unlock() }
+    public func unlock() throws { try toLock.unlock() }
 }
 
 extension LSLock: Equatable where LockType: Equatable {
