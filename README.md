@@ -9,7 +9,7 @@ Installation can be done through the Swift Package Manager
 
 Add the following line to your dependencies in you `Package.swift` file
 ```swift
-.package(url: "https://github.com/Ponyboy47/LockSmith.git", from: "0.2.0")
+.package(url: "https://github.com/Ponyboy47/LockSmith.git", from: "0.5.0")
 ```
 
 ## Usage

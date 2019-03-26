@@ -31,5 +31,5 @@ extension LSLock: Equatable where LockType: Equatable {
 }
 
 extension LSLock: Hashable where LockType: Hashable {
-    public var hashValue: Int { return toLock.hashValue }
+    public func hash(into hasher: inout Hasher) { hasher.combine(toLock) }
 }
