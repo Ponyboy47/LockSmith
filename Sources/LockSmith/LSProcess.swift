@@ -1,15 +1,15 @@
-import TrailBlazer
 import ErrNo
 import class Foundation.ProcessInfo
+import TrailBlazer
 
 #if os(Linux)
-import func Glibc.kill
 import func Glibc.geteuid
 import func Glibc.getpwuid
+import func Glibc.kill
 #else
-import func Darwin.kill
 import func Darwin.geteuid
 import func Darwin.getpwuid
+import func Darwin.kill
 #endif
 
 public final class LSProcess: Lockable {
@@ -167,7 +167,7 @@ public final class LSProcess: Lockable {
 
     public static func == (lhs: LSProcess, rhs: LSProcess) -> Bool {
         return lhs.arguments == rhs.arguments &&
-               lhs.name == rhs.name &&
-               lhs.username == rhs.username
+            lhs.name == rhs.name &&
+            lhs.username == rhs.username
     }
 }
